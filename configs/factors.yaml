@@ -1,8 +1,25 @@
 version: 0.1
 factors:
-  - name: "momentum_20d"
-    lookback: 20
-  - name: "mean_reversion_5d"
-    lookback: 5
+  - name: "tr_mean20"
+    weight: 0.2
+    enabled: true
+  - name: "tr_ratio20"
+    weight: 0.15
+    enabled: true
+  - name: "tr_stab20"
+    weight: -0.1
+    enabled: true
+  - name: "vr"
+    weight: 0.2
+    enabled: true
+  - name: "vr_dir"
+    weight: 0.15
+    enabled: true
+  - name: "div_up20"
+    weight: 0.2
+    enabled: true
+  - name: "div_dn20"
+    weight: -0.1
+    enabled: true
 output:
   signal_path: "outputs/signals"

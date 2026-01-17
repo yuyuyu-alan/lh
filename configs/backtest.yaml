@@ -8,6 +8,10 @@ frequency: "daily"
 fees:
   commission: 0.0003
   slippage: 0.0001
+n_holdings: 30
+buffer: 15
+cost_bps: 5
+fill_price: "open"
 paths:
   data_root: "data/lake"
   output_reports: "outputs/reports"
