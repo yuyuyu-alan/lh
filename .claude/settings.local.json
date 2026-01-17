@@ -6,7 +6,13 @@
       "Bash(pip install:*)",
       "Bash(ls:*)",
       "Bash(python3 -c:*)",
-      "Bash(xargs:*)"
+      "Bash(xargs:*)",
+      "Bash(tree:*)",
+      "Bash(just:*)",
+      "Bash(for limit in 100 200 300 400 500)",
+      "Bash(do:*)",
+      "Bash(echo:*)",
+      "Bash(done:*)"
     ]
   }
 }

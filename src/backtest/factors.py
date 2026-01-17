@@ -77,7 +77,7 @@ def vr(df: pd.DataFrame) -> pd.Series:
 def vr_dir(df: pd.DataFrame) -> pd.Series:
     _validate_columns(df)
     returns = df.groupby("ts_code", sort=False)["close"].pct_change()
-    return vr(df) * returns.sign()
+    return vr(df) * (returns > 0).astype(int) - vr(df) * (returns < 0).astype(int)
 
 
 def div_up20(df: pd.DataFrame) -> pd.Series:

@@ -77,5 +77,5 @@ def yearly_returns(nav_df: pd.DataFrame) -> pd.DataFrame:
     nav_df = nav_df.copy()
     nav_df["year"] = nav_df["date"].astype(str).str.slice(0, 4)
     grouped = nav_df.groupby("year", sort=True)
-    summary = grouped.apply(lambda g: g["nav"].iloc[-1] / g["nav"].iloc[0] - 1.0)
+    summary = grouped.apply(lambda g: g["nav"].iloc[-1] / g["nav"].iloc[0] - 1.0, include_groups=False)
     return summary.reset_index(name="return")

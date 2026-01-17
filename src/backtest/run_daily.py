@@ -101,12 +101,67 @@ def run_backtest(args: argparse.Namespace) -> pd.DataFrame:
     if data.empty:
         raise RuntimeError("No daily bars data found in the requested date range")
 
+    # Filter to only use SZ and SH stocks (exclude BJ and other exchanges which may have data issues)
+    data = data[data["ts_code"].str.endswith((".SZ", ".SH"))]
+
     if args.limit_codes:
         allowed_codes = sorted(data["ts_code"].unique())[: args.limit_codes]
         data = data[data["ts_code"].isin(allowed_codes)]
 
     data = _compute_factors(data)
-    data["open_next"] = data.groupby("ts_code", sort=False)["open"].shift(-1)
+
+    # FIX FUTURE FUNCTION:
+    # Signal at Day T (using T close data) -> Buy at T+1 Open -> Sell at T+2 Open.
+    # This prevents using Day T's signal to buy at Day T's Open (which happened earlier).
+    g = data.groupby("ts_code", sort=False)["open"]
+    data["open_T1"] = g.shift(-1)
+    data["open_T2"] = g.shift(-2)
+    data["realized_return"] = data["open_T2"] / data["open_T1"] - 1.0
+
+    # Drop rows with NaN factors (insufficient history for rolling windows)
+    factor_cols = ["tr_mean20", "tr_ratio20", "tr_stab20", "vr", "vr_dir", "div_up20", "div_dn20"]
+    data = data.dropna(subset=factor_cols)
+
+    # Clean data: remove extreme returns and price anomalies
+    # Remove extreme returns (likely data errors, splits, etc.)
+    data = data[(data["realized_return"].abs() <= 0.20)]  # Cap at ±20% daily return
+
+    # Remove rows with invalid prices
+    data = data[(data["open"] > 0) & (data["open_T1"] > 0) & (data["open_T2"] > 0)]
+    data = data[(data["open"] < 1000) & (data["open_T1"] < 1000) & (data["open_T2"] < 1000)]
+
+    # Remove IPO first day/last days (when return is NaN)
+    data = data.dropna(subset=["realized_return"])
+
+    # AGGRESSIVE FILTERING: Remove stocks with too many extreme price movements
+    stock_stats = data.groupby("ts_code").agg({
+        "realized_return": ["count", "std", "min", "max"],
+        "open": "mean"
+    }).reset_index()
+
+    # Flatten column names
+    stock_stats.columns = ["ts_code", "count", "return_std", "return_min", "return_max", "avg_price"]
+
+    # Filter out stocks with:
+    # - Too few observations
+    # - Extremely high volatility
+    # - Extreme min/max returns (even after filtering)
+    stock_stats = stock_stats[
+        (stock_stats["count"] >= 100) &  # At least 100 observations
+        (stock_stats["return_std"] <= 0.10) &  # Return std <= 10% (STRICTER)
+        (stock_stats["return_min"] >= -0.15) &  # Min return >= -15% (STRICTER)
+        (stock_stats["return_max"] <= 0.15) &   # Max return <= 15% (STRICTER)
+        (stock_stats["avg_price"] >= 2.0) &     # Average price >= 2 yuan (STRICTER)
+        (stock_stats["avg_price"] <= 300)       # Average price <= 300 yuan (STRICTER)
+    ]
+
+    logger.info("Filtered from %s to %s stocks based on data quality", data["ts_code"].nunique(), len(stock_stats))
+
+    # Keep only high-quality stocks
+    data = data[data["ts_code"].isin(stock_stats["ts_code"])]
+
+    if data.empty:
+        raise RuntimeError("No data remains after aggressive filtering")
 
     trade_dates = sorted(data["trade_date"].unique())
     nav = 1.0
@@ -116,7 +171,7 @@ def run_backtest(args: argparse.Namespace) -> pd.DataFrame:
     signals_dir = Path("outputs/signals")
     for idx, trade_date in enumerate(trade_dates):
         day_slice = data[data["trade_date"] == trade_date].copy()
-        day_slice = day_slice.dropna(subset=["open", "open_next"])
+        day_slice = day_slice.dropna(subset=["open", "open_T1", "open_T2"])
         if day_slice.empty:
             continue
 
@@ -130,11 +185,15 @@ def run_backtest(args: argparse.Namespace) -> pd.DataFrame:
         slice_selected["weight"] = slice_selected["ts_code"].map(weights)
         slice_selected = slice_selected.dropna(subset=["weight"])
 
-        returns = slice_selected["open_next"] / slice_selected["open"] - 1.0
+        returns = slice_selected["realized_return"]
         gross_return = float((returns * slice_selected["weight"]).sum())
         turnover = compute_turnover(prev_weights, weights)
         net_return = apply_costs(gross_return, turnover, cost_bps)
         nav *= 1.0 + net_return
+
+        # DEBUG: Log daily returns for first few days and if NAV becomes extreme
+        if idx < 10 or nav > 10 or nav < 0.1:
+            logger.info(f"DEBUG Day {trade_date}: NAV={nav:.6f}, GrossReturn={gross_return:.6f}, NetReturn={net_return:.6f}, Selected={len(selected)} stocks")
 
         records.append({"date": trade_date, "nav": nav, "turnover": turnover})
         _save_signals(trade_date, weights, signals_dir)
