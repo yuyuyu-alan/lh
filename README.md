@@ -14,6 +14,17 @@ Set your Tushare token in the environment:
 export TUSHARE_TOKEN="your_token_here"
 ```
 
+## Data layout
+
+Parquet data is organized under `data/lake` using year partitions:
+
+```
+data/lake/
+  year=2024/
+    part-<uuid>.parquet
+    compact.parquet
+```
+
 ## Smoke workflow (placeholder)
 
 ```bash
