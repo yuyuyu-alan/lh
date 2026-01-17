@@ -13,6 +13,14 @@ from src.backtest import factors as factor_lib
 from src.backtest.engine import apply_costs, compute_turnover
 from src.backtest.scoring import score_cross_section
 from src.backtest.selector import select_with_buffer
+from src.reports.metrics import (
+    ann_vol,
+    cagr,
+    max_drawdown,
+    sharpe,
+    turnover_stats,
+    yearly_returns,
+)
 from src.utils.config import load_yaml
 from src.utils.parquet_io import read_partitions
 
@@ -136,16 +144,40 @@ def run_backtest(args: argparse.Namespace) -> pd.DataFrame:
             logger.info("Processed %s/%s trade dates", idx + 1, len(trade_dates))
 
     nav_df = pd.DataFrame(records)
+    if nav_df.empty:
+        raise RuntimeError("No NAV records generated")
     reports_dir = Path("outputs/reports")
     reports_dir.mkdir(parents=True, exist_ok=True)
     nav_path = reports_dir / "nav_curve.parquet"
     nav_df.to_parquet(nav_path, index=False)
 
-    if not nav_df.empty:
-        avg_turnover = nav_df["turnover"].mean()
-        final_nav = nav_df["nav"].iloc[-1]
-        logger.info("Summary: final_nav=%.4f avg_turnover=%.4f", final_nav, avg_turnover)
-        print(f"summary final_nav={final_nav:.4f} avg_turnover={avg_turnover:.4f}")
+    summary = {
+        "start_date": str(nav_df["date"].iloc[0]),
+        "end_date": str(nav_df["date"].iloc[-1]),
+        "final_nav": float(nav_df["nav"].iloc[-1]),
+        "cagr": cagr(nav_df["nav"]),
+        "ann_vol": ann_vol(nav_df["nav"]),
+        "sharpe": sharpe(nav_df["nav"]),
+    }
+    drawdown = max_drawdown(nav_df["nav"], nav_df["date"])
+    summary["max_drawdown"] = {
+        "value": drawdown.value,
+        "start": drawdown.start,
+        "end": drawdown.end,
+    }
+    summary["turnover"] = turnover_stats(nav_df["turnover"])
+
+    yearly = yearly_returns(nav_df)
+    yearly_path = reports_dir / "yearly_returns.csv"
+    yearly.to_csv(yearly_path, index=False)
+
+    summary_path = reports_dir / "summary.json"
+    pd.Series(summary).to_json(summary_path, indent=2)
+
+    avg_turnover = nav_df["turnover"].mean()
+    final_nav = nav_df["nav"].iloc[-1]
+    logger.info("Summary: final_nav=%.4f avg_turnover=%.4f", final_nav, avg_turnover)
+    print(f"summary final_nav={final_nav:.4f} avg_turnover={avg_turnover:.4f}")
 
     return nav_df
 

@@ -25,6 +25,14 @@ data/lake/
     compact.parquet
 ```
 
+## Smoke workflow
+
+Run the backtest smoke command with `just`:
+
+```bash
+just backtest_smoke
+```
+
 ## Smoke workflow (placeholder)
 
 ```bash
