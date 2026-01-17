@@ -1,0 +1,8 @@
+version: 0.1
+factors:
+  - name: "momentum_20d"
+    lookback: 20
+  - name: "mean_reversion_5d"
+    lookback: 5
+output:
+  signal_path: "outputs/signals"
