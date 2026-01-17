@@ -1,0 +1,21 @@
+# Local data and outputs
+data/*
+!data/.gitkeep
+data/lake/*
+!data/lake/.gitkeep
+outputs/*
+!outputs/.gitkeep
+outputs/reports/*
+!outputs/reports/.gitkeep
+outputs/signals/*
+!outputs/signals/.gitkeep
+logs/*
+!logs/.gitkeep
+
+# Python artifacts
+__pycache__/
+.venv/
+
+# Data files
+*.parquet
+*.csv
